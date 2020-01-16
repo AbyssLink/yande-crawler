@@ -14,7 +14,14 @@ from yande import Yande
 logger = logging.getLogger('yande.re')
 logger.setLevel(logging.DEBUG)
 
-fh = logging.FileHandler('yande.log')
+now = datetime.now()
+dt_string = now.strftime("%Y_%m_%d %H-%M-%S")
+log_dir = os.path.join(os.getcwd(), 'logs')
+print(log_dir)
+if not os.path.exists(log_dir):
+    os.makedirs("logs")
+
+fh = logging.FileHandler(os.path.join(log_dir, f'{dt_string}.log'))
 fh.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
