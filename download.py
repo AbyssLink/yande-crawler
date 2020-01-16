@@ -59,9 +59,10 @@ def main_download(tags_: str, start_: int, end_: int, path_: str):
         if not os.path.exists(default_path):
             os.makedirs("download")
     try:
-        now = datetime.now()
+        begin = datetime.now()
         count = 1
         file_size = 0
+
         for i in range(start_, end_ + 1):
             yande = Yande(tags_=tags_, page_=i)
             logger.info(f"Request API URL = {yande.url()}")
@@ -77,14 +78,15 @@ def main_download(tags_: str, start_: int, end_: int, path_: str):
                                  size_=post_info["file_size"], path_=path_)
                     count = count + 1
                     file_size = file_size + post_info["file_size"]
-                end = datetime.now()
-                logger.info(
-                    f"Task complete, all_file_size = {str(round(file_size / 1024 / 1024, 2))}MiB, "
-                    f"used_time = {str(round((end - now).total_seconds() / 60, 2))}Minutes, "
-                    f"average_speed = {str(round((file_size / 1024) / (end - now).total_seconds(), 2))}KiB")
             else:
                 logger.error(f"HTTP_STATUS: {status}. Can't get yande.re post API list")
                 time.sleep(1)
+
+        end = datetime.now()
+        logger.info(
+            f"Task complete, all_file_size = {str(round(file_size / 1024 / 1024, 2))}MiB, "
+            f"used_time = {str(round((end - begin).total_seconds() / 60, 2))}Minutes, "
+            f"average_speed = {str(round((file_size / 1024) / (end - begin).total_seconds(), 2))}KiB")
     except KeyboardInterrupt:
         exit(0)
 
@@ -98,24 +100,29 @@ def download_pic(url_: str, path_: str, tags_: str, id_: str, size_: float):
     :param id_:
     :param size_:
     """
+    # Exclude images that are too large
+    # Images Bigger then 20MB will not be download
+    if size_ > 20971520:
+        logger.warning('file size > 20MiB, jump over...')
+        return None
+
+    # Timed Sleep
     sleep_time = round(random.random() * 10, 2)
     logger.info(f"Timed sleep for {str(sleep_time)}s")
     time.sleep(sleep_time)
-    logger.info(f"Start downloading id = {id_} Size = {str(round(size_ / 1024 / 1024, 2))}MiB, please wait.")
 
+    # Download picture
+    logger.info(f"Start downloading id = {id_} Size = {str(round(size_ / 1024 / 1024, 2))}MiB, please wait.")
     r = requests.get(url=url_, headers=headers, stream=True)
     status = r.status_code
-
     if status == 200:
         # Total size in bytes.
         total_size = int(r.headers.get('content-length', 0))
         block_size = 1024  # 1 Kibibyte
         t = tqdm(total=total_size, unit='iB', unit_scale=True)
-
         file_extension = os.path.splitext(urlparse(url_).path)[1]
         base_name = f"yande.re {id_} {optimize_tags(tags_=tags_)}{file_extension}"
         file_path = os.path.join(path_, base_name)
-
         try:
             with open(file_path, 'wb') as f:
                 for data in r.iter_content(block_size):
@@ -123,11 +130,9 @@ def download_pic(url_: str, path_: str, tags_: str, id_: str, size_: float):
                     f.write(data)
         except Exception as e:
             logger.error(e)
-
         t.close()
         if total_size != 0 and t.n != total_size:
             logger.error("ERROR, something went wrong")
-
         logger.info(f"Download successfully.\n")
     else:
         logger.error(f"HTTP_STATUS: {status}. file in {url_} failed to download. "
