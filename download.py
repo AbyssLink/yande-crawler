@@ -47,7 +47,7 @@ default_path: str = os.path.join(
 
 def main_download(tags_: str, start_: int, end_: int, path_: str):
     """
-
+    Main Download process
     :param tags_:
     :param start_:
     :param end_:
@@ -93,7 +93,7 @@ def main_download(tags_: str, start_: int, end_: int, path_: str):
 
 def download_pic(url_: str, path_: str, tags_: str, id_: str, size_: float):
     """
-
+    Download specific picture
     :param url_:
     :param path_:
     :param tags_:
@@ -140,17 +140,16 @@ def download_pic(url_: str, path_: str, tags_: str, id_: str, size_: float):
         time.sleep(1)
 
 
-def save_info(info_: dict, path_: str):
-    path_ = os.path.join(path_, str(datetime.now().strftime(f"%m-%d-%Y %H_%M_%S")))
-
-
 def optimize_tags(tags_: str):
     """
     optimize the tags string, prevent path errors and filenames from being too long
     :param tags_:
     """
-    tags_ = tags_.replace('/', '_')
-    tags_ = tags_.replace(':', '_')
+    # Replace Invalid characters
+    # Invalid Character list: " * : < > ? / \ |
+    # TODO: optimize string replace method
+    tags_ = tags_.replace('/', '_').replace(':', '_').replace('\\', '_').replace('|', '_').replace('*', '_').replace(
+        '?', '_').replace('<', '_').replace('>', '_')
     # Limit file name length for 120 character
     if len(tags_) <= 120:
         return tags_
