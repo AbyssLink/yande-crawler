@@ -56,8 +56,6 @@ def main_download(tags_: str, start_: int, end_: int, path_: str):
     if not os.path.exists(path_):
         logger.warning(f"Download Path='{path_}' does not exist, use default path={default_path}\n")
         path_ = default_path
-        if not os.path.exists(default_path):
-            os.makedirs("download")
     try:
         begin = datetime.now()
         count = 1
@@ -74,8 +72,12 @@ def main_download(tags_: str, start_: int, end_: int, path_: str):
 
                 for post_info in posts:
                     logger.info(f"Img# {count}")
+                    pic_path = os.path.join(path_, f"{tags_}", f"page{i}")
+                    # print(pic_path)
+                    if not (os.path.exists(pic_path)):
+                        os.makedirs(pic_path)
                     download_pic(url_=post_info['file_url'], id_=post_info['id'], tags_=post_info['tags'],
-                                 size_=post_info["file_size"], path_=path_)
+                                 size_=post_info["file_size"], path_=pic_path)
                     count = count + 1
                     file_size = file_size + post_info["file_size"]
             else:
@@ -95,7 +97,7 @@ def download_pic(url_: str, path_: str, tags_: str, id_: str, size_: float):
     """
     Download specific picture
     :param url_:
-    :param path_:
+    :param path_: folder to save this picture
     :param tags_:
     :param id_:
     :param size_:
@@ -166,7 +168,7 @@ def optimize_tags(tags_: str):
         return new_tags
 
 
-def test():
+def test_long_filename():
     download_pic(
         url_='https://files.yande.re/image/57cb51d1f8e85cd99c34af016b687d40/yande.re%20601083%20ass%20breast_hold'
              '%20doi_tamako%20feet%20iyojima_anzu%20koori_chikage%20masuzu_aki%20megane%20naked%20nipples'
