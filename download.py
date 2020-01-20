@@ -17,7 +17,7 @@ logger.setLevel(logging.DEBUG)
 now = datetime.now()
 dt_string = now.strftime("%Y_%m_%d %H-%M-%S")
 log_dir = os.path.join(os.getcwd(), 'logs')
-print(log_dir)
+# print(log_dir)
 if not os.path.exists(log_dir):
     os.makedirs("logs")
 
