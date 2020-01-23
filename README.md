@@ -11,7 +11,7 @@ cd yande-downloader
 
 pip install -r requirements.txt
 
-python3 download.py
+python3 client.py
 # example input argument
 Search Tags = yuri
 Start Page = 10
