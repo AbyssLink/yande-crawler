@@ -4,7 +4,7 @@ import os
 import random
 import time
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import requests
 from tqdm import tqdm
@@ -13,7 +13,7 @@ logger = logging.getLogger('yande.re')
 logger.setLevel(logging.DEBUG)
 
 now = datetime.now()
-dt_string = now.strftime("%Y_%m_%d %H-%M-%S")
+dt_string = now.strftime("%m_%d_%Y %H-%M-%S")
 log_dir = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_dir):
     os.makedirs("logs")
@@ -35,10 +35,12 @@ logger.addHandler(ch)
 class Yande:
     def __init__(self, tags_: str):
         super().__init__()
+        self.__api_root: str = "https://yande.re/post.json?"
         self.__begin_time = datetime.now()
         self.__tags: str = tags_.replace(' ', '+')
         self.__start: int = 1
         self.__end: int = 1
+        self.__max_file_size: int = 20971520
         self.__total_downloads: int = 0
         self.__total_file_size: int = 0
         self.__info: dict = dict()
@@ -53,16 +55,11 @@ class Yande:
 
     def set_path(self, path_):
         if not os.path.exists(path_):
-            logger.warning(f"Download Path='{path_}' does not exist, use default path='{self.__storage}'\n")
+            self.log_warn_storage_path(path_=path_)
         else:
             self.__storage = path_
 
     def crawl_pages_by_tag(self, start_: int, end_: int):
-        """
-
-        :param start_:
-        :param end_:
-        """
         self.__start = start_
         self.__end = end_
 
@@ -71,29 +68,20 @@ class Yande:
             for i in range(self.__start, self.__end + 1):
                 self.crawl_page(i)
             end_time = datetime.now()
-            logger.info(
-                f"Task complete, all_file_size = {str(round(self.__total_file_size / 1024 / 1024, 2))}MiB, "
-                f"used_time = {str(round((end_time - self.__begin_time).total_seconds() / 60, 2))}Minutes, "
-                f"average_speed = "
-                f"{str(round((self.__total_file_size / 1024) / (end_time - self.__begin_time).total_seconds(), 2))}KiB")
+            self.log_info_summary(end_time_=end_time)
         except KeyboardInterrupt:
             exit(0)
 
     def crawl_page(self, page_num_: int):
-        """
-
-        :param page_num_:
-        """
-        url = f"https://yande.re/post.json?tags={str(self.__tags)}&api_version=2&page={str(page_num_)}"
-        logger.info(f"Request API URL = {url}")
+        url = f"{self.__api_root}tags={str(self.__tags)}&api_version=2&page={str(page_num_)}"
         r = requests.get(url, self.__headers)
         status = r.status_code
         if status == 200:
             posts = json.loads(r.content)['posts']
-            logger.info(f"Page# {page_num_} : {str(len(posts))} images will be downloaded...\n")
+            amount = len(posts)
+            self.log_info_crawl_page(url, page_num_, amount)
 
             for post_info in posts:
-                logger.info(f"Img# {self.__total_downloads + 1}")
                 pic_path = os.path.join(self.__storage, f"{self.__tags}", f"page{page_num_}")
                 if not (os.path.exists(pic_path)):
                     os.makedirs(pic_path)
@@ -101,23 +89,22 @@ class Yande:
                                     path_=pic_path)
 
         else:
-            logger.error(f"HTTP_STATUS: {status}. Can't get yande.re post API list")
+            self.log_error_http_error(status_=status, url_=url)
             time.sleep(1)
 
     def retrieve_image(self, url_: str, id_: str, size_: float, path_: str):
         # Exclude images that are too large
-        # Images Bigger then 20MB will not be download
-        if size_ > 20971520:
-            logger.warning('file size > 20MiB, jump over...')
+        # Images Bigger then self.__max_file_size will not be download
+        if size_ > self.__max_file_size:
+            self.log_warn_file_too_large()
             return None
 
+        self.log_info_retrieval(id_, size_)
+
         # Timed Sleep
-        sleep_time = round(random.random() * 10, 2)
-        logger.info(f"Timed sleep for {str(sleep_time)}s")
-        time.sleep(sleep_time)
+        self.timed_sleep()
 
         # Download picture
-        logger.info(f"Start downloading id = {id_} Size = {str(round(size_ / 1024 / 1024, 2))}MiB, please wait.")
         r = requests.get(url=url_, headers=self.__headers, stream=True)
         status = r.status_code
         if status == 200:
@@ -125,9 +112,8 @@ class Yande:
             total_size = int(r.headers.get('content-length', 0))
             block_size = 1024  # 1 Kibibyte
             t = tqdm(total=total_size, unit='iB', unit_scale=True)
-            file_extension = os.path.splitext(urlparse(url_).path)[1]
-            base_name = f"yande.re {id_} {self.optimize_tags(tags_=self.__tags)}{file_extension}"
-            file_path = os.path.join(path_, base_name)
+            file_name = url2pathname(os.path.basename(url_))
+            file_path = os.path.join(path_, self.optimize_file_name(file_name))
             try:
                 with open(file_path, 'wb') as f:
                     for data in r.iter_content(block_size):
@@ -140,36 +126,53 @@ class Yande:
             t.close()
             if total_size != 0 and t.n != total_size:
                 logger.error("ERROR, something went wrong")
-            logger.info(f"Download successfully.\n")
         else:
-            logger.error(f"HTTP_STATUS: {status}. file in {url_} failed to download. "
-                         f"Retry in 1 sec. {url_}")
+            self.log_error_http_error(status, url_)
             time.sleep(1)
 
     @staticmethod
-    def optimize_tags(tags_: str):
+    def timed_sleep():
+        sleep_time = round(random.random() * 10, 2)
+        logger.info(f"Timed sleep for {str(sleep_time)}s")
+        time.sleep(sleep_time)
+
+    def log_warn_storage_path(self, path_):
+        logger.warning(f"Download Path='{path_}' does not exist, use default path='{self.__storage}'\n")
+
+    def log_warn_file_too_large(self):
+        logger.warning('file size too large, jump over...')
+
+    def log_error_http_error(self, status_, url_):
+        logger.error(f"HTTP_STATUS: {status_}. Failed URL: {url_}")
+
+    def log_info_crawl_page(self, url_, page_num_, amount_):
+        logger.info(" * " * 20)
+        logger.info(f"Request API URL = {url_}")
+        logger.info(f"Page# {page_num_} : {str(amount_)} images will be downloaded...")
+
+    def log_info_retrieval(self, id_, size_):
+        logger.info(" - " * 20)
+        logger.info(f"Img# {self.__total_downloads + 1}")
+        logger.info(f"Target id = {id_} Size = {str(round(size_ / 1024 / 1024, 2))}MiB")
+
+    def log_info_summary(self, end_time_):
+        logger.info(
+            f"Task complete, all_file_size = {str(round(self.__total_file_size / 1024 / 1024, 2))}MiB, "
+            f"used_time = {str(round((end_time_ - self.__begin_time).total_seconds() / 60, 2))}Minutes, "
+            f"average_speed = "
+            f"{str(round((self.__total_file_size / 1024) / (end_time_ - self.__begin_time).total_seconds(), 2))}KiB")
+
+    @staticmethod
+    def optimize_file_name(name_: str):
         """
         optimize the tags string, prevent path errors and filenames from being too long
         """
         # Replace Invalid characters
         # Invalid Character list: " * : < > ? / \ |
         # TODO: optimize string replace method
-        tags_ = tags_.replace('/', '_').replace(':', '_').replace('\\', '_'). \
+        name_ = name_.replace('/', '_').replace(':', '_').replace('\\', '_'). \
             replace('|', '_').replace('*', '_').replace('?', '_').replace('<', '_').replace('>', '_')
-        # Limit file name length for 120 character
-        if len(tags_) <= 120:
-            return tags_
-        else:
-            tag_list = tags_.split(' ')
-            new_tags = ''
-            index = 0
-            while len(new_tags) < 120:
-                if new_tags != '':
-                    new_tags = new_tags + ' ' + tag_list[index]
-                else:
-                    new_tags = new_tags + tag_list[index]
-                index = index + 1
-            return new_tags
+        return name_
 
     def test_long_filename(self):
         self.__tags = 'aces8492unsung akihara_sekka ass breast_hold doi_tamako feet fujimori_mito hanamoto_yoshika '
