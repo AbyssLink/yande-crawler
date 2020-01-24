@@ -1,13 +1,13 @@
-# yande-downloader
+# yande-crawler
 
-a simple downloader for [yande.re](https://yande.re)
+a simple crawler for [yande.re](https://yande.re)
 
 ## Usage
 
 ```shell
 git clone https://github.com/ShiroCheng/yande-downloader.git
 
-cd yande-downloader
+cd yande-crawler
 
 pip install -r requirements.txt
 
@@ -24,4 +24,10 @@ Download Path = ''
 
 ## API
 
-Using  [API](https://yande.re/help/api) from **yande.re**.
+Using  [API](https://yande.re/help/api) from yande.re.
+
+
+
+## Reference
+
+Code structure referenced to [konadl](https://github.com/k4yt3x/konadl)
