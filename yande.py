@@ -12,13 +12,11 @@ from tqdm import tqdm
 logger = logging.getLogger('yande.re')
 logger.setLevel(logging.DEBUG)
 
-now = datetime.now()
-dt_string = now.strftime("%m_%d_%Y %H-%M-%S")
 log_dir = os.path.join(os.getcwd(), 'logs')
 if not os.path.exists(log_dir):
     os.makedirs("logs")
 
-fh = logging.FileHandler(os.path.join(log_dir, f'{dt_string}.log'))
+fh = logging.FileHandler(os.path.join(log_dir, f'{datetime.now().strftime("%m_%d_%Y %H-%M-%S")}.log'))
 fh.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
@@ -33,13 +31,13 @@ logger.addHandler(ch)
 
 
 class Yande:
-    def __init__(self, tags_: str):
+    def __init__(self):
         super().__init__()
         self.__api_root: str = "https://yande.re/post.json?"
         self.__begin_time = datetime.now()
-        self.__tags: str = tags_.replace(' ', '+')
-        self.__start: int = 1
-        self.__end: int = 1
+        self.__tags: str = ''
+        self.__start_page: int = 1
+        self.__end_page: int = 1
         self.__max_file_size: int = 20971520
         self.__total_downloads: int = 0
         self.__total_file_size: int = 0
@@ -59,13 +57,14 @@ class Yande:
         else:
             self.__storage = path_
 
-    def crawl_pages_by_tag(self, start_: int, end_: int):
-        self.__start = start_
-        self.__end = end_
+    def crawl_pages_by_tag(self, tags_: str, start_page_: int, end_page_: int):
+        self.__tags = tags_.replace(' ', '+')
+        self.__start_page = start_page_
+        self.__end_page = end_page_
 
         try:
             self.__begin_time = datetime.now()
-            for i in range(self.__start, self.__end + 1):
+            for i in range(self.__start_page, self.__end_page + 1):
                 self.crawl_page(i)
             end_time = datetime.now()
             self.log_info_summary(end_time_=end_time)
@@ -108,27 +107,30 @@ class Yande:
         r = requests.get(url=url_, headers=self.__headers, stream=True)
         status = r.status_code
         if status == 200:
-            # Total size in bytes.
-            total_size = int(r.headers.get('content-length', 0))
-            block_size = 1024  # 1 Kibibyte
-            t = tqdm(total=total_size, unit='iB', unit_scale=True)
             file_name = url2pathname(os.path.basename(url_))
             file_path = os.path.join(path_, self.optimize_file_name(file_name))
-            try:
-                with open(file_path, 'wb') as f:
-                    for data in r.iter_content(block_size):
-                        t.update(len(data))
-                        f.write(data)
-                self.__total_downloads += 1
-                self.__total_file_size += size_
-            except Exception as e:
-                logger.error(e)
-            t.close()
-            if total_size != 0 and t.n != total_size:
-                logger.error("ERROR, something went wrong")
+            self.write_with_progress(file_path, r, size_)
         else:
             self.log_error_http_error(status, url_)
             time.sleep(1)
+
+    def write_with_progress(self, file_path_, request_, size_):
+        # Total size in bytes.
+        total_size = int(request_.headers.get('content-length', 0))
+        block_size = 1024  # 1 Kibibyte
+        t = tqdm(total=total_size, unit='iB', unit_scale=True)
+        try:
+            with open(file_path_, 'wb') as f:
+                for data in request_.iter_content(chunk_size=block_size):
+                    t.update(len(data))
+                    f.write(data)
+            self.__total_downloads += 1
+            self.__total_file_size += size_
+        except Exception as e:
+            logger.error(e)
+        t.close()
+        if total_size != 0 and t.n != total_size:
+            logger.error("ERROR, something went wrong")
 
     @staticmethod
     def timed_sleep():

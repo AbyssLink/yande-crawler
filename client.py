@@ -5,6 +5,6 @@ if __name__ == "__main__":
     start_page = input("Start Page = ")
     end_page = input("End Page = ")
     path = input("Download Path = ")
-    yande = Yande(tags_=tags)
+    yande = Yande()
     yande.set_path(path_=path)
-    yande.crawl_pages_by_tag(start_=int(start_page), end_=int(end_page))
+    yande.crawl_pages_by_tag(tags_=tags, start_page_=int(start_page), end_page_=int(end_page))
