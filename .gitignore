@@ -168,3 +168,4 @@ dmypy.json
 download/
 yande_downloader.log
 /yande_downloader.log
+/.idea/yande-crawler.iml

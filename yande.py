@@ -4,6 +4,7 @@ import os
 import random
 import time
 from datetime import datetime
+from multiprocessing.pool import ThreadPool
 from urllib.request import url2pathname
 
 import requests
@@ -42,6 +43,8 @@ class Yande:
         self.__total_downloads: int = 0
         self.__total_file_size: int = 0
         self.__info: dict = dict()
+        self.__is_multiple_process: bool = False
+        self.__process_num: int = 5
         self.__storage: str = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'download')
         self.__headers: dict = {
@@ -56,6 +59,13 @@ class Yande:
             self.log_warn_storage_path(path_=path_)
         else:
             self.__storage = path_
+
+    def set_multiple_process(self, process_num_):
+        if process_num_ == 1:
+            return
+        else:
+            self.__is_multiple_process = True
+            self.__process_num = int(process_num_)
 
     def crawl_pages_by_tag(self, tags_: str, start_page_: int, end_page_: int):
         self.__tags = tags_.replace(' ', '+')
@@ -80,15 +90,50 @@ class Yande:
             amount = len(posts)
             self.log_info_crawl_page(url, page_num_, amount)
 
-            for post_info in posts:
+            if not self.__is_multiple_process:
+                for post_info in posts:
+                    pic_path = os.path.join(self.__storage, f"{self.__tags}", f"page{page_num_}")
+                    if not (os.path.exists(pic_path)):
+                        os.makedirs(pic_path)
+                    self.retrieve_image(url_=post_info['file_url'], id_=post_info['id'], size_=post_info["file_size"],
+                                        path_=pic_path)
+
+            else:
                 pic_path = os.path.join(self.__storage, f"{self.__tags}", f"page{page_num_}")
                 if not (os.path.exists(pic_path)):
                     os.makedirs(pic_path)
-                self.retrieve_image(url_=post_info['file_url'], id_=post_info['id'], size_=post_info["file_size"],
-                                    path_=pic_path)
+                img_infos = []
+                for post_info in posts:
+                    img_info = {'url': post_info['file_url'], 'path': pic_path, 'size': post_info["file_size"]}
+                    img_infos.append(img_info)
+                results = ThreadPool(self.__process_num).imap_unordered(self.retrieve_image_simple, img_infos)
+                for r in results:
+                    print(r)
 
         else:
             self.log_error_http_error(status_=status, url_=url)
+            time.sleep(1)
+
+    def retrieve_image_simple(self, info_: dict):
+        # Timed Sleep
+        self.timed_sleep()
+
+        url_ = info_['url']
+        path_ = info_['path']
+        size_ = info_['size']
+
+        if size_ > self.__max_file_size:
+            self.log_warn_file_too_large()
+            return None
+
+        r = requests.get(url=url_, headers=self.__headers, stream=True)
+        status = r.status_code
+        if status == 200:
+            file_name = url2pathname(os.path.basename(url_))
+            file_path = os.path.join(path_, self.optimize_file_name(file_name))
+            self.write_with_progress(file_path, r, size_)
+        else:
+            self.log_error_http_error(status, url_)
             time.sleep(1)
 
     def retrieve_image(self, url_: str, id_: str, size_: float, path_: str):
@@ -134,7 +179,7 @@ class Yande:
 
     @staticmethod
     def timed_sleep():
-        sleep_time = round(random.random() * 10, 2)
+        sleep_time = round(random.random() * 3, 2)
         logger.info(f"Timed sleep for {str(sleep_time)}s")
         time.sleep(sleep_time)
 
@@ -148,12 +193,11 @@ class Yande:
         logger.error(f"HTTP_STATUS: {status_}. Failed URL: {url_}")
 
     def log_info_crawl_page(self, url_, page_num_, amount_):
-        logger.info(" * " * 20)
         logger.info(f"Request API URL = {url_}")
         logger.info(f"Page# {page_num_} : {str(amount_)} images will be downloaded...")
 
     def log_info_retrieval(self, id_, size_):
-        logger.info(" - " * 20)
+        logger.info("\n")
         logger.info(f"Img# {self.__total_downloads + 1}")
         logger.info(f"Target id = {id_} Size = {str(round(size_ / 1024 / 1024, 2))}MiB")
 
@@ -186,3 +230,8 @@ class Yande:
                  '%20doi_tamako%20feet%20iyojima_anzu%20koori_chikage%20masuzu_aki%20megane%20naked%20nipples'
                  '%20nogi_wakaba%20pubic_hair%20pussy%20uesato_hinata%20uncensored.png', id_='601083',
             size_=3097256, path_=self.__storage)
+
+
+if __name__ == '__main__':
+    y = Yande()
+    y.test_long_filename()
